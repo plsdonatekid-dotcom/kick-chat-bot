@@ -56,6 +56,14 @@ class KickChat extends EventEmitter {
   }
 
   async connect() {
+    const manualId = process.env.KICK_CHATROOM_ID;
+    if (manualId) {
+      this.chatroomId = manualId;
+      console.log(`Using manual chatroom ID: ${this.chatroomId}`);
+      this.connectPusher();
+      return;
+    }
+
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
     const headers = {
       'User-Agent': ua,
@@ -63,9 +71,6 @@ class KickChat extends EventEmitter {
       'Accept-Language': 'en-US,en;q=0.9',
       'Referer': `https://kick.com/${this.streamerName}`,
       'Origin': 'https://kick.com',
-      'Sec-Fetch-Site': 'same-origin',
-      'Sec-Fetch-Mode': 'cors',
-      'Sec-Fetch-Dest': 'empty',
     };
 
     const urls = [
@@ -73,19 +78,23 @@ class KickChat extends EventEmitter {
       `https://kick.com/api/v2/channels/${this.streamerName}/chatroom`,
     ];
 
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          this.chatroomId = data.chatroom?.id || data.id;
-          if (this.chatroomId) {
-            console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}`);
-            this.connectPusher();
-            return;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            this.chatroomId = data.chatroom?.id || data.id;
+            if (this.chatroomId) {
+              console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}`);
+              this.connectPusher();
+              return;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
+      const delay = 1000 * (attempt + 1) + Math.random() * 2000;
+      await new Promise(r => setTimeout(r, delay));
     }
 
     console.error(`KICK API error: could not get chatroom ID for ${this.streamerName}`);
