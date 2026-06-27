@@ -7,6 +7,51 @@ class KickChat extends EventEmitter {
     this.ws = null;
     this.chatroomId = null;
     this.reconnectTimer = null;
+    this.cookies = '';
+    this.loggedIn = false;
+  }
+
+  async login(email, password) {
+    try {
+      const res = await fetch('https://kick.com/api/v2/mobile/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) {
+        console.error('KICK login failed:', res.status, await res.text().catch(() => ''));
+        return;
+      }
+      const setCookie = res.headers.get('set-cookie');
+      if (setCookie) this.cookies = setCookie;
+      this.loggedIn = true;
+      console.log('Logged in to KICK');
+    } catch (err) {
+      console.error('KICK login error:', err.message);
+    }
+  }
+
+  async sendMessage(text) {
+    if (!this.loggedIn || !this.chatroomId) return false;
+    try {
+      const res = await fetch(`https://kick.com/api/v2/chatrooms/${this.chatroomId}/messages/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': this.cookies,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        },
+        body: JSON.stringify({ content: text, type: 'message' })
+      });
+      if (!res.ok) console.error('Send message failed:', res.status);
+      return res.ok;
+    } catch (err) {
+      console.error('Send message error:', err.message);
+      return false;
+    }
   }
 
   async connect() {
@@ -45,6 +90,12 @@ class KickChat extends EventEmitter {
     this.ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
+
+        if (msg.event === 'pusher:ping') {
+          this.ws.send(JSON.stringify({ event: 'pusher:pong', data: {} }));
+          return;
+        }
+
         if (msg.event === 'App\\Events\\ChatMessageEvent') {
           const data = JSON.parse(msg.data);
           this.emit('message', data);
@@ -69,6 +120,7 @@ class KickChat extends EventEmitter {
 
   setStreamer(name) {
     this.streamerName = name;
+    this.chatroomId = null;
     this.disconnect();
     this.connect();
   }

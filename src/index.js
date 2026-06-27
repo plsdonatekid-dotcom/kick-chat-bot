@@ -1,8 +1,14 @@
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const KickChat = require('./kick');
 const DiscordBot = require('./discord');
+
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => res.end('ok')).listen(PORT, () => {
+  console.log(`Health server running on port ${PORT}`);
+});
 
 const STATE_FILE = path.join(__dirname, '..', 'state.json');
 
@@ -63,7 +69,9 @@ function nextSendCycle() {
     sendStage = 1;
   }
 
-  discordBot.sendMessage(state.channelId, currentMessage);
+  const rawContent = currentMessage.replace(/\*\*.*?\*\*:\s*/, '');
+  kickChat.sendMessage(rawContent);
+  discordBot.sendMessage(state.channelId, `➡️ ${currentMessage}`);
 
   if (sendStage === 1) {
     sendStage = 2;
@@ -118,4 +126,11 @@ discordBot.on('setStreamer', (name) => {
 });
 
 kickChat.connect();
+
+const email = process.env.KICK_EMAIL;
+const password = process.env.KICK_PASSWORD;
+if (email && password) {
+  kickChat.login(email, password);
+}
+
 discordBot.login(process.env.DISCORD_TOKEN);
