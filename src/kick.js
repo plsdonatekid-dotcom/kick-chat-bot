@@ -56,19 +56,40 @@ class KickChat extends EventEmitter {
   }
 
   async connect() {
-    try {
-      const res = await fetch(`https://kick.com/api/v2/channels/${this.streamerName}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-      });
-      if (!res.ok) throw new Error(`API returned ${res.status}`);
-      const data = await res.json();
-      this.chatroomId = data.chatroom.id;
-      console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}`);
-      this.connectPusher();
-    } catch (err) {
-      console.error('KICK API error:', err.message);
-      this.scheduleReconnect();
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+    const headers = {
+      'User-Agent': ua,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': `https://kick.com/${this.streamerName}`,
+      'Origin': 'https://kick.com',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Dest': 'empty',
+    };
+
+    const urls = [
+      `https://kick.com/api/v2/channels/${this.streamerName}`,
+      `https://kick.com/api/v2/channels/${this.streamerName}/chatroom`,
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          this.chatroomId = data.chatroom?.id || data.id;
+          if (this.chatroomId) {
+            console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}`);
+            this.connectPusher();
+            return;
+          }
+        }
+      } catch {}
     }
+
+    console.error(`KICK API error: could not get chatroom ID for ${this.streamerName}`);
+    this.scheduleReconnect();
   }
 
   connectPusher() {
