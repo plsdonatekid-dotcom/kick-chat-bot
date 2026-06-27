@@ -7,6 +7,7 @@ class KickChat extends EventEmitter {
     this.ws = null;
     this.chatroomId = null;
     this.reconnectTimer = null;
+    this.reconnectDelay = 1000;
     this.cookies = '';
     this.loggedIn = false;
   }
@@ -75,15 +76,22 @@ class KickChat extends EventEmitter {
       try { this.ws.close(); } catch {}
     }
 
-    const wsUrl = 'wss://ws-us2.pusher.com/app/32cbd69e4b9503209761?protocol=7&client=js&version=8.3.0&flash=false';
+    const wsUrl = 'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false';
 
     this.ws = new (require('ws'))(wsUrl);
 
     this.ws.on('open', () => {
-      this.ws.send(JSON.stringify({
-        event: 'pusher:subscribe',
-        data: { channel: `channel.${this.chatroomId}` }
-      }));
+      this.resetReconnectDelay();
+      for (const ch of [
+        `chatrooms.${this.chatroomId}.v2`,
+        `chatroom_${this.chatroomId}`,
+        `chatrooms.${this.chatroomId}`
+      ]) {
+        this.ws.send(JSON.stringify({
+          event: 'pusher:subscribe',
+          data: { channel: ch }
+        }));
+      }
       console.log('Pusher connected and subscribed');
     });
 
@@ -96,6 +104,14 @@ class KickChat extends EventEmitter {
           return;
         }
 
+        if (msg.event === 'pusher:connection_established') {
+          return;
+        }
+
+        if (msg.event === 'pusher_internal:subscription_succeeded') {
+          return;
+        }
+
         if (msg.event === 'App\\Events\\ChatMessageEvent') {
           const data = JSON.parse(msg.data);
           this.emit('message', data);
@@ -104,7 +120,6 @@ class KickChat extends EventEmitter {
     });
 
     this.ws.on('close', () => {
-      console.log('Pusher disconnected, reconnecting...');
       this.scheduleReconnect();
     });
 
@@ -115,7 +130,14 @@ class KickChat extends EventEmitter {
 
   scheduleReconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = setTimeout(() => this.connect(), 5000);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+      this.connect();
+    }, this.reconnectDelay);
+  }
+
+  resetReconnectDelay() {
+    this.reconnectDelay = 1000;
   }
 
   setStreamer(name) {
