@@ -5,10 +5,14 @@ const http = require('http');
 const KickChat = require('./kick');
 const DiscordBot = require('./discord');
 
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => res.end('ok')).listen(PORT, () => {
-  console.log(`Health server running on port ${PORT}`);
-});
+function startHealthServer(port) {
+  const server = http.createServer((req, res) => res.end('ok'));
+  server.on('error', () => {
+    if (port < 3005) startHealthServer(port + 1);
+  });
+  server.listen(port, () => console.log(`Health server on port ${port}`));
+}
+startHealthServer(parseInt(process.env.PORT) || 3000);
 
 const STATE_FILE = path.join(__dirname, '..', 'state.json');
 
