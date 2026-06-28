@@ -16,7 +16,7 @@ let state = {
   messagePool: [],
   channelId: null,
   isRunning: false,
-  streamer: process.env.KICK_STREAMER || 'xqc'
+  streamer: process.env.KICK_STREAMER || 'hstikkytokky'
 };
 
 function loadState() {
@@ -39,10 +39,15 @@ function saveState() {
 }
 
 loadState();
+
+if (process.env.KICK_STREAMER) {
+  state.streamer = process.env.KICK_STREAMER;
+}
+
 saveState();
 
 const kickChat = new KickChat(state.streamer);
-const discordBot = new DiscordBot(state, saveState);
+const discordBot = new DiscordBot(state, saveState, kickChat);
 
 let sendTimer = null;
 let currentMessage = null;
@@ -88,10 +93,15 @@ function startSendLoop() {
   sendTimer = setTimeout(nextSendCycle, 1000);
 }
 
+const POOL_LIMIT = 500;
+
 kickChat.on('message', (msg) => {
   if (!msg.content || !msg.sender) return;
   const formatted = `**${msg.sender.username}**: ${msg.content}`;
   state.messagePool.push(formatted);
+  if (state.messagePool.length > POOL_LIMIT) {
+    state.messagePool.splice(0, state.messagePool.length - POOL_LIMIT);
+  }
 
   if (state.channelId) {
     discordBot.sendMessage(state.channelId, `📥 ${formatted}`);
@@ -127,10 +137,18 @@ discordBot.on('setStreamer', (name) => {
 
 kickChat.connect();
 
-const email = process.env.KICK_EMAIL;
-const password = process.env.KICK_PASSWORD;
-if (email && password) {
-  kickChat.login(email, password);
+const clientId = process.env.KICK_CLIENT_ID;
+const clientSecret = process.env.KICK_CLIENT_SECRET;
+if (clientId && clientSecret) {
+  kickChat.loginWithOAuth(clientId, clientSecret);
+} else if (process.env.KICK_ACCESS_TOKEN) {
+  kickChat.setOAuthToken(process.env.KICK_ACCESS_TOKEN);
+} else {
+  const email = process.env.KICK_EMAIL;
+  const password = process.env.KICK_PASSWORD;
+  if (email && password) {
+    kickChat.login(email, password);
+  }
 }
 
 discordBot.login(process.env.DISCORD_TOKEN);

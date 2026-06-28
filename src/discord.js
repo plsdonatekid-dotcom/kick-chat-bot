@@ -2,10 +2,11 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 const EventEmitter = require('events');
 
 class DiscordBot extends EventEmitter {
-  constructor(state, saveState) {
+  constructor(state, saveState, kickChat) {
     super();
     this.state = state;
     this.saveState = saveState;
+    this.kickChat = kickChat;
     this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
     this.setup();
   }
@@ -40,8 +41,32 @@ class DiscordBot extends EventEmitter {
           await interaction.reply(`Switched to streamer: **${name}**`);
           break;
         }
+        case 'send': {
+          const msg = interaction.options.getString('message');
+          const sent = await this.kickChat?.sendMessage(msg);
+          await interaction.reply(sent ? `Sent: "${msg}"` : 'Failed to send message (not logged in).');
+          break;
+        }
+        case 'auth': {
+          const { verifier, challenge } = this.kickChat.generatePKCEParams();
+          const url = this.kickChat.getAuthorizationUrl(verifier, challenge);
+          this.kickChat.startAuthServer(verifier).catch(() => {});
+          await interaction.reply(`Authorize the bot here:\n${url}\n\nAfter authorizing, come back and use /status to check.`);
+          break;
+        }
+        case 'pool':
+          await interaction.reply(
+            `**Pool:** ${this.state.messagePool.length} messages\n` +
+            this.state.messagePool.slice(-5).map(m => `- ${m}`).join('\n') || '(empty)'
+          );
+          break;
+        case 'clear':
+          this.state.messagePool = [];
+          this.saveState();
+          await interaction.reply('Message pool cleared.');
+          break;
         case 'status': {
-          const running = this.state.isRunning ? '✅ Running' : '❌ Stopped';
+          const running = this.state.isRunning ? 'Running' : 'Stopped';
           const channel = this.state.channelId ? `<#${this.state.channelId}>` : 'Not set';
           await interaction.reply(
             `**Status:** ${running}\n**Channel:** ${channel}\n**Pool:** ${this.state.messagePool.length} messages\n**Streamer:** ${this.state.streamer}`
@@ -60,6 +85,19 @@ class DiscordBot extends EventEmitter {
       new SlashCommandBuilder()
         .setName('stop')
         .setDescription('Stop the random message loop'),
+      new SlashCommandBuilder()
+        .setName('auth')
+        .setDescription('Authorize the bot to send messages as your Kick account'),
+      new SlashCommandBuilder()
+        .setName('send')
+        .setDescription('Send a message to KICK chat')
+        .addStringOption(o => o.setName('message').setDescription('Message text').setRequired(true)),
+      new SlashCommandBuilder()
+        .setName('pool')
+        .setDescription('Show pooled messages'),
+      new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Clear the message pool'),
       new SlashCommandBuilder()
         .setName('msgview')
         .setDescription('Set channel where messages are sent')
