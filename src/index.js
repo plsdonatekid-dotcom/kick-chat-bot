@@ -164,7 +164,7 @@ async function checkLiveStatus() {
 
 setInterval(checkLiveStatus, 60000);
 
-kickChat.on('message', (msg) => {
+kickChat.on('message', async (msg) => {
   if (!msg.content || !msg.sender) {
     console.log('Pusher raw message (skipped):', JSON.stringify(msg).slice(0, 300));
     return;
