@@ -179,7 +179,7 @@ class KickChat extends EventEmitter {
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.KICK_CLIENT_ID,
-      redirect_uri: 'http://localhost:3456/callback',
+      redirect_uri: 'http://127.0.0.1:3456/callback',
       scope: 'chat:write user:read',
       code_challenge: challenge,
       code_challenge_method: 'S256',
@@ -191,7 +191,7 @@ class KickChat extends EventEmitter {
   async startAuthServer(verifier) {
     return new Promise((resolve, reject) => {
       this.authCallbackServer = http.createServer(async (req, res) => {
-        const url = new URL(req.url, 'http://localhost:3456');
+        const url = new URL(req.url, 'http://127.0.0.1:3456');
         if (url.pathname === '/callback') {
           const code = url.searchParams.get('code');
           const state = url.searchParams.get('state');
@@ -208,7 +208,7 @@ class KickChat extends EventEmitter {
         }
       });
       this.authCallbackServer.listen(3456, () => {
-        console.log('Auth callback server on http://localhost:3456');
+        console.log('Auth callback server on http://127.0.0.1:3456');
       });
       this.authCallbackServer.on('error', reject);
     });
@@ -228,7 +228,7 @@ class KickChat extends EventEmitter {
         client_id: process.env.KICK_CLIENT_ID,
         client_secret: process.env.KICK_CLIENT_SECRET,
         code,
-        redirect_uri: 'http://localhost:3456/callback',
+        redirect_uri: 'http://127.0.0.1:3456/callback',
         code_verifier: verifier
       });
       const res = await fetch('https://id.kick.com/oauth/token', {
