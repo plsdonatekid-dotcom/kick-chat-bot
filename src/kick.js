@@ -281,6 +281,11 @@ class KickChat extends EventEmitter {
     if (manualId) {
       this.chatroomId = manualId;
       console.log(`Using manual chatroom ID: ${this.chatroomId}`);
+      try {
+        const raw = await this.curlFetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const ch = JSON.parse(raw);
+        if (ch.user_id) this.broadcasterUserId = ch.user_id;
+      } catch {}
       this.connectPusher();
       return;
     }
