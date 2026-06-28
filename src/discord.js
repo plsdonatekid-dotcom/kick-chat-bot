@@ -12,6 +12,8 @@ class DiscordBot extends EventEmitter {
   }
 
   setup() {
+    this.client.on('error', (err) => console.error('Discord client error:', err.message));
+
     this.client.once('ready', async () => {
       console.log(`Discord bot logged in as ${this.client.user.tag}`);
       await this.registerCommands();
@@ -20,6 +22,7 @@ class DiscordBot extends EventEmitter {
     this.client.on('interactionCreate', async (interaction) => {
       if (!interaction.isChatInputCommand()) return;
 
+      try {
       switch (interaction.commandName) {
         case 'start':
           this.emit('start');
@@ -73,6 +76,10 @@ class DiscordBot extends EventEmitter {
           );
           break;
         }
+      }
+      } catch (err) {
+        console.error('Command error:', err.message);
+        if (!interaction.replied) await interaction.reply({ content: 'Error executing command.', ephemeral: true }).catch(() => {});
       }
     });
   }
