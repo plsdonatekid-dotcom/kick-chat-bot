@@ -223,14 +223,14 @@ class KickChat extends EventEmitter {
 
   async exchangeCode(code, verifier) {
     try {
-      const body = new URLSearchParams({
+      const params = {
         grant_type: 'authorization_code',
         client_id: process.env.KICK_CLIENT_ID,
         client_secret: process.env.KICK_CLIENT_SECRET,
         code,
         redirect_uri: 'http://127.0.0.1:3456/callback',
-        code_verifier: verifier
-      });
+      };
+      const body = new URLSearchParams(params);
       const res = await fetch('https://id.kick.com/oauth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
