@@ -19,7 +19,7 @@ class KickChat extends EventEmitter {
     this.streamerName = streamerName;
     this.ws = null;
     this.chatroomId = null;
-    this.broadcasterUserId = parseInt(process.env.KICK_BROADCASTER_USER_ID) || null;
+    this.broadcasterUserId = parseInt(process.env.KICK_BROADCASTER_USER_ID || process.env.KICK_BROADCASTER) || null;
     this.reconnectTimer = null;
     this.reconnectDelay = 1000;
     this.accessToken = null;
