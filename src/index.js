@@ -126,11 +126,13 @@ const POOL_LIMIT = 500;
 let wasLive = false;
 
 async function checkLiveStatus() {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
   try {
-    const { body } = await kickChat.curlFetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+    const res = await fetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
+      headers: { 'User-Agent': ua, 'Accept': 'application/json', 'Referer': 'https://kick.com/', 'Origin': 'https://kick.com' }
     });
-    const ch = JSON.parse(body);
+    if (!res.ok) throw new Error('fetch status ' + res.status);
+    const ch = await res.json();
     const isLive = ch.livestream !== null;
     if (isLive && !wasLive && state.channelId) {
       console.log(`${state.streamer} went live — auto-starting`);
@@ -144,14 +146,38 @@ async function checkLiveStatus() {
       stopSendLoop();
     }
     wasLive = isLive;
-  } catch {}
+  } catch {
+    try {
+      const { body } = await kickChat.curlFetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
+        headers: { 'User-Agent': ua, 'Accept': 'application/json', 'Referer': 'https://kick.com/', 'Origin': 'https://kick.com' }
+      });
+      const ch = JSON.parse(body);
+      const isLive = ch.livestream !== null;
+      if (isLive && !wasLive && state.channelId) {
+        console.log(`${state.streamer} went live — auto-starting`);
+        state.isRunning = true;
+        saveState();
+        startSendLoop();
+      } else if (!isLive && wasLive) {
+        console.log(`${state.streamer} went offline — auto-stopping`);
+        state.isRunning = false;
+        saveState();
+        stopSendLoop();
+      }
+      wasLive = isLive;
+    } catch {}
+  }
 }
 
 setInterval(checkLiveStatus, 60000);
 
 kickChat.on('message', (msg) => {
-  if (!msg.content || !msg.sender) return;
+  if (!msg.content || !msg.sender) {
+    console.log('Pusher raw message (skipped):', JSON.stringify(msg).slice(0, 300));
+    return;
+  }
   const formatted = `**${msg.sender.username}**: ${msg.content}`;
+  console.log(`📥 Chat message from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
   state.messagePool.push(formatted);
   if (state.messagePool.length > POOL_LIMIT) {
     state.messagePool.splice(0, state.messagePool.length - POOL_LIMIT);

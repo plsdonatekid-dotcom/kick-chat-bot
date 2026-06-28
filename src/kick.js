@@ -11,13 +11,15 @@ function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest();
 }
 
+const CURL_CMD = process.platform === 'win32' ? 'curl.exe' : 'curl';
+
 class KickChat extends EventEmitter {
   constructor(streamerName) {
     super();
     this.streamerName = streamerName;
     this.ws = null;
     this.chatroomId = null;
-    this.broadcasterUserId = null;
+    this.broadcasterUserId = parseInt(process.env.KICK_BROADCASTER_USER_ID) || null;
     this.reconnectTimer = null;
     this.reconnectDelay = 1000;
     this.accessToken = null;
@@ -38,7 +40,7 @@ class KickChat extends EventEmitter {
       }
       if (options.body) args.push('-d', options.body);
       args.push(url);
-      execFile('curl.exe', args, { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+      execFile(CURL_CMD, args, { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
         if (err) return reject(err);
         const lines = stdout.trim().split('\n');
         const statusCode = parseInt(lines.pop(), 10);
@@ -134,6 +136,30 @@ class KickChat extends EventEmitter {
     }
 
     if (this.accessToken) {
+      const uid = this.broadcasterUserId || parseInt(this.chatroomId);
+      const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+      // Try v1 API via Node fetch first (lightweight, works if no Cloudflare)
+      try {
+        const res = await fetch('https://api.kick.com/public/v1/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            'User-Agent': ua
+          },
+          body: JSON.stringify({ type: 'user', content: text, broadcaster_user_id: uid })
+        });
+        const body = await res.text();
+        console.log('Send v1 fetch (uid=' + uid + '):', res.status, body.slice(0, 300));
+        if (res.ok && (body.startsWith('{') || body.startsWith('['))) {
+          const parsed = JSON.parse(body);
+          if (parsed.data?.message_id || parsed.message_id || parsed.id) return true;
+        }
+      } catch (err) {
+        console.error('Send v1 fetch error:', err.message);
+      }
+
       // Try v1 API via curl (bypasses Cloudflare)
       try {
         const { statusCode, body } = await this.curlFetch('https://api.kick.com/public/v1/chat', {
@@ -141,22 +167,21 @@ class KickChat extends EventEmitter {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': ua
           },
           body: JSON.stringify({
             type: 'user',
             content: text,
-            broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
+            broadcaster_user_id: uid
           })
         });
-        console.log('Send v1 uid=' + (this.broadcasterUserId || parseInt(this.chatroomId)) + ':', statusCode, body.slice(0, 300));
-        // Skip Cloudflare HTML pages and non-JSON responses
+        console.log('Send v1 curl (uid=' + uid + '):', statusCode, body.slice(0, 300));
         if (statusCode >= 200 && statusCode < 300 && (body.startsWith('{') || body.startsWith('['))) {
           const parsed = JSON.parse(body);
           if (parsed.data?.message_id || parsed.message_id || parsed.id) return true;
         }
       } catch (err) {
-        console.error('Send v1 error:', err.message);
+        console.error('Send v1 curl error:', err.message);
       }
 
       // Try v2 API via curl with Bearer token
@@ -379,16 +404,43 @@ class KickChat extends EventEmitter {
     return false;
   }
 
+  async fetchChannelInfo() {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+    const headers = {
+      'User-Agent': ua,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': `https://kick.com/${this.streamerName}`,
+      'Origin': 'https://kick.com',
+    };
+    try {
+      const res = await fetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user_id) this.broadcasterUserId = data.user_id;
+        return data;
+      }
+    } catch {}
+    try {
+      const { body } = await this.curlFetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers });
+      const data = JSON.parse(body);
+      if (data.user_id) this.broadcasterUserId = data.user_id;
+      return data;
+    } catch {}
+    return null;
+  }
+
   async connect() {
     const manualId = process.env.KICK_CHATROOM_ID;
     if (manualId) {
       this.chatroomId = manualId;
       console.log(`Using manual chatroom ID: ${this.chatroomId}`);
-      try {
-        const { body } = await this.curlFetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const ch = JSON.parse(body);
-        if (ch.user_id) this.broadcasterUserId = ch.user_id;
-      } catch {}
+      const info = await this.fetchChannelInfo();
+      if (info) {
+        console.log(`Channel info: user_id=${info.user_id}, chatroom_id=${info.chatroom?.id}`);
+      } else {
+        console.log(`Channel info unavailable, using KICK_BROADCASTER_USER_ID=${this.broadcasterUserId || 'not set'}`);
+      }
       this.connectPusher();
       return;
     }
@@ -416,7 +468,7 @@ class KickChat extends EventEmitter {
             this.chatroomId = data.chatroom?.id || data.id;
             if (data.user_id) this.broadcasterUserId = data.user_id;
             if (this.chatroomId) {
-              console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}`);
+              console.log(`Connected to ${this.streamerName}, chatroom: ${this.chatroomId}, user_id: ${this.broadcasterUserId}`);
               this.connectPusher();
               return;
             }
@@ -431,7 +483,7 @@ class KickChat extends EventEmitter {
           this.chatroomId = data.chatroom?.id || data.id;
           if (data.user_id) this.broadcasterUserId = data.user_id;
           if (this.chatroomId) {
-            console.log(`Connected via curl to ${this.streamerName}, chatroom: ${this.chatroomId}`);
+            console.log(`Connected via curl to ${this.streamerName}, chatroom: ${this.chatroomId}, user_id: ${this.broadcasterUserId}`);
             this.connectPusher();
             return;
           }
@@ -489,9 +541,15 @@ class KickChat extends EventEmitter {
 
         if (msg.event === 'App\\Events\\ChatMessageEvent') {
           const data = JSON.parse(msg.data);
+          console.log('Pusher chat event:', data.sender?.username, (data.content || '').slice(0, 80));
           this.emit('message', data);
+          return;
         }
-      } catch {}
+
+        console.log('Pusher unhandled event:', msg.event, JSON.stringify(msg.data).slice(0, 200));
+      } catch (e) {
+        console.log('Pusher parse error:', e.message, raw.toString().slice(0, 200));
+      }
     });
 
     this.ws.on('close', () => {
