@@ -180,7 +180,7 @@ class KickChat extends EventEmitter {
       response_type: 'code',
       client_id: process.env.KICK_CLIENT_ID,
       redirect_uri: 'http://127.0.0.1:3456/callback',
-      scope: 'chat:write user:read',
+      scope: 'chat:write',
       code_challenge: challenge,
       code_challenge_method: 'S256',
       state: verifier

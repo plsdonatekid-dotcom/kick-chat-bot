@@ -51,10 +51,27 @@ class DiscordBot extends EventEmitter {
           break;
         }
         case 'auth': {
-          const { verifier, challenge } = this.kickChat.generatePKCEParams();
-          const url = this.kickChat.getAuthorizationUrl(verifier, challenge);
-          this.kickChat.startAuthServer(verifier).catch(() => {});
-          await interaction.reply(`Authorize the bot here:\n${url}\n\nAfter authorizing, come back and use /status to check.`);
+          const pkce = this.kickChat.generatePKCEParams();
+          this.kickChat.authVerifier = pkce.verifier;
+          const url = this.kickChat.getAuthorizationUrl(pkce.verifier, pkce.challenge);
+          await interaction.reply(
+            `1. Visit this URL and authorize:\n${url}\n\n` +
+            `2. After authorizing, the browser will show "connection refused" — ` +
+            `copy the ENTIRE address bar URL and paste it here with:\n` +
+            `/cb <paste_url_here>`
+          );
+          break;
+        }
+        case 'cb': {
+          const fullUrl = interaction.options.getString('url');
+          const parsed = new URL(fullUrl);
+          const code = parsed.searchParams.get('code');
+          if (!code) {
+            await interaction.reply('No code found in that URL. Make sure you copy the full address bar URL after authorizing.');
+            break;
+          }
+          await this.kickChat.exchangeCode(code, this.kickChat.authVerifier);
+          await interaction.reply('Authorized! You can now send messages as your account. Try /send hello');
           break;
         }
         case 'pool':
@@ -95,6 +112,10 @@ class DiscordBot extends EventEmitter {
       new SlashCommandBuilder()
         .setName('auth')
         .setDescription('Authorize the bot to send messages as your Kick account'),
+      new SlashCommandBuilder()
+        .setName('cb')
+        .setDescription('Paste the callback URL after authorizing')
+        .addStringOption(o => o.setName('url').setDescription('Full URL from address bar after authorization').setRequired(true)),
       new SlashCommandBuilder()
         .setName('send')
         .setDescription('Send a message to KICK chat')
