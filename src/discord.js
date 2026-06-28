@@ -45,9 +45,10 @@ class DiscordBot extends EventEmitter {
           break;
         }
         case 'send': {
+          await interaction.deferReply();
           const msg = interaction.options.getString('message');
           const sent = await this.kickChat?.sendMessage(msg);
-          await interaction.reply(sent ? `Sent: "${msg}"` : 'Failed to send message (not logged in).');
+          await interaction.editReply(sent ? `Sent: "${msg}"` : 'Failed to send message (not logged in).');
           break;
         }
         case 'auth': {
@@ -63,19 +64,20 @@ class DiscordBot extends EventEmitter {
           break;
         }
         case 'cb': {
+          await interaction.deferReply();
           const fullUrl = interaction.options.getString('url');
           const parsed = new URL(fullUrl);
           const code = parsed.searchParams.get('code');
           if (!code) {
-            await interaction.reply('No code found in that URL. Make sure you copy the full address bar URL after authorizing.');
+            await interaction.editReply('No code found in that URL. Make sure you copy the full address bar URL after authorizing.');
             break;
           }
           if (!this.kickChat.authVerifier) {
-            await interaction.reply('Session expired. Please run /auth first to get a fresh URL.');
+            await interaction.editReply('Session expired. Please run /auth first to get a fresh URL.');
             break;
           }
           const ok = await this.kickChat.exchangeCode(code, this.kickChat.authVerifier);
-          await interaction.reply(ok ? 'Authorized! Try /send hello' : 'Authorization failed. Try /auth again.');
+          await interaction.editReply(ok ? 'Authorized! Try /send hello' : 'Authorization failed. Try /auth again.');
           break;
         }
         case 'pool':
@@ -100,7 +102,11 @@ class DiscordBot extends EventEmitter {
       }
       } catch (err) {
         console.error('Command error:', err.message);
-        if (!interaction.replied) await interaction.reply({ content: 'Error executing command.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        if (interaction.deferred) {
+          await interaction.editReply('Error executing command.').catch(() => {});
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: 'Error executing command.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
       }
     });
   }
