@@ -70,8 +70,12 @@ class DiscordBot extends EventEmitter {
             await interaction.reply('No code found in that URL. Make sure you copy the full address bar URL after authorizing.');
             break;
           }
-          await this.kickChat.exchangeCode(code, this.kickChat.authVerifier);
-          await interaction.reply('Authorized! You can now send messages as your account. Try /send hello');
+          if (!this.kickChat.authVerifier) {
+            await interaction.reply('Session expired. Please run /auth first to get a fresh URL.');
+            break;
+          }
+          const ok = await this.kickChat.exchangeCode(code, this.kickChat.authVerifier);
+          await interaction.reply(ok ? 'Authorized! Try /send hello' : 'Authorization failed. Try /auth again.');
           break;
         }
         case 'pool':

@@ -242,12 +242,15 @@ class KickChat extends EventEmitter {
         this.refreshToken = data.refresh_token;
         this.tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
         this.loggedIn = true;
-        console.log('User OAuth token obtained — can now send as you');
+        console.log('User OAuth token obtained');
+        return true;
       } else {
         console.error('Code exchange failed:', res.status, await res.text().catch(() => ''));
+        return false;
       }
     } catch (err) {
       console.error('Code exchange error:', err.message);
+      return false;
     }
   }
 
