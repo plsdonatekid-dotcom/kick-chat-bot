@@ -77,9 +77,9 @@ const swaps = {
   want: ['need', 'gotta have', 'desire', 'fancy', 'could do with'],
   need: ['gotta', 'have to', 'must', 'got to'],
   love: ['rate', 'fuck with', 'adore', 'am obsessed with', 'live for'],
-  hate: ['cant stand', 'despise', 'hate on', 'detest', 'loathe', 'can't vibe with'],
+  hate: ['cant stand', 'despise', 'hate on', 'detest', 'loathe', "can't vibe with"],
   like: ['rate', 'fuck with', 'vibe with', 'mess with', 'dig', 'enjoy'],
-  dislike: ['dont rate', 'not feeling', 'not fucking with', 'can't vibe with'],
+  dislike: ['dont rate', 'not feeling', 'not fucking with', "can't vibe with"],
   do: ['do it', 'get it done', 'make it happen', 'pull it off', 'execute'],
   make: ['cook', 'produce', 'create', 'cook up', 'whip up', 'put together'],
   get: ['grab', 'bag', 'secure', 'acquire', 'cop', 'snag', 'obtain'],
@@ -338,7 +338,7 @@ const swaps = {
   mistake: ['error', 'blunder', 'fuck up', 'screw up', 'whoopsie', 'mess up'],
   advantage: ['upper hand', 'edge', 'leg up', 'leverage'],
   disadvantage: ['downside', 'drawback', 'handicap', 'weakness'],
-];
+};
 
 const prefixes = ['', 'yo ', 'bro ', 'ngl ', 'fr ', 'tbh ', 'bruh ', 'aint gonna lie ', 'nbs ', 'icb ', 'lowkey ', 'highkey '];
 const suffixes = ['', ' ngl', ' fr', ' tbh', ' icl', ' on god', ' deadass', ' for real', ' no cap', ' fr fr', ' swear down', ' init', ' innit', ' you get me', ' you feel me'];
