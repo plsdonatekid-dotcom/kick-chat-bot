@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, MessageFlags } = require('discord.js');
 const EventEmitter = require('events');
 
 class DiscordBot extends EventEmitter {
@@ -100,7 +100,7 @@ class DiscordBot extends EventEmitter {
       }
       } catch (err) {
         console.error('Command error:', err.message);
-        if (!interaction.replied) await interaction.reply({ content: 'Error executing command.', ephemeral: true }).catch(() => {});
+        if (!interaction.replied) await interaction.reply({ content: 'Error executing command.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
     });
   }

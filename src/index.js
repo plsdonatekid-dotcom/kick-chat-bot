@@ -116,6 +116,32 @@ function startSendLoop() {
 
 const POOL_LIMIT = 500;
 
+let wasLive = false;
+
+async function checkLiveStatus() {
+  try {
+    const raw = await kickChat.curlFetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const ch = JSON.parse(raw);
+    const isLive = ch.livestream !== null;
+    if (isLive && !wasLive && state.channelId) {
+      console.log(`${state.streamer} went live — auto-starting`);
+      state.isRunning = true;
+      saveState();
+      startSendLoop();
+    } else if (!isLive && wasLive) {
+      console.log(`${state.streamer} went offline — auto-stopping`);
+      state.isRunning = false;
+      saveState();
+      stopSendLoop();
+    }
+    wasLive = isLive;
+  } catch {}
+}
+
+setInterval(checkLiveStatus, 60000);
+
 kickChat.on('message', (msg) => {
   if (!msg.content || !msg.sender) return;
   const formatted = `**${msg.sender.username}**: ${msg.content}`;
