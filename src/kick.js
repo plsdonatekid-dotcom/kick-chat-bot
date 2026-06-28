@@ -179,12 +179,14 @@ class KickChat extends EventEmitter {
     return process.env.KICK_REDIRECT_URI || 'http://127.0.0.1:3456/callback';
   }
 
-  getAuthorizationUrl(verifier) {
+  getAuthorizationUrl(verifier, challenge) {
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.KICK_CLIENT_ID,
       redirect_uri: this.getRedirectUri(),
       scope: 'chat:write',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
       state: verifier
     });
     return `https://id.kick.com/oauth/authorize?${params.toString()}`;
@@ -231,6 +233,7 @@ class KickChat extends EventEmitter {
         client_secret: process.env.KICK_CLIENT_SECRET,
         code,
         redirect_uri: this.getRedirectUri(),
+        code_verifier: verifier,
       });
       const res = await fetch('https://id.kick.com/oauth/token', {
         method: 'POST',

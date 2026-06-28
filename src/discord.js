@@ -53,7 +53,7 @@ class DiscordBot extends EventEmitter {
         case 'auth': {
           const pkce = this.kickChat.generatePKCEParams();
           this.kickChat.authVerifier = pkce.verifier;
-          const url = this.kickChat.getAuthorizationUrl(pkce.verifier);
+          const url = this.kickChat.getAuthorizationUrl(pkce.verifier, pkce.challenge);
           const redirect = this.kickChat.getRedirectUri();
           await interaction.reply(
             `**Make sure** your Kick app has this exact redirect URI:\n\`${redirect}\`\n\n` +
