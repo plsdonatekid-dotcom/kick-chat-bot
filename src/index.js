@@ -39,6 +39,7 @@ function startHealthServer(port, kc) {
 const STATE_FILE = path.join(__dirname, '..', 'state.json');
 
 let state = {
+  messagePool: [],
   channelId: null,
   isRunning: false,
   streamer: process.env.KICK_STREAMER || 'hstikkytokky',
@@ -76,6 +77,44 @@ const kickChat = new KickChat(state.streamer);
 const discordBot = new DiscordBot(state, saveState, kickChat);
 startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
+const POOL_LIMIT = 500;
+let sendTimer = null;
+
+async function sendCycle() {
+  if (!state.isRunning || !state.channelId) return;
+
+  if (state.messagePool.length === 0) {
+    sendTimer = setTimeout(sendCycle, 10000);
+    return;
+  }
+
+  const entry = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
+  const rawContent = entry.replace(/\*\*.*?\*\*:\s*/, '');
+  console.log('Sending:', rawContent.slice(0, 80));
+
+  await kickChat.sendMessage(rawContent);
+  discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
+
+  setTimeout(async () => {
+    await kickChat.sendMessage(rawContent);
+    discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
+
+    sendTimer = setTimeout(sendCycle, 20000);
+  }, 700);
+}
+
+function startSendCycle() {
+  if (sendTimer) clearTimeout(sendTimer);
+  sendTimer = setTimeout(sendCycle, 1000);
+}
+
+function stopSendCycle() {
+  if (sendTimer) {
+    clearTimeout(sendTimer);
+    sendTimer = null;
+  }
+}
+
 let wasLive = false;
 
 async function checkLiveStatus() {
@@ -91,10 +130,12 @@ async function checkLiveStatus() {
       console.log(`${state.streamer} went live — auto-starting`);
       state.isRunning = true;
       saveState();
+      startSendCycle();
     } else if (!isLive && wasLive) {
       console.log(`${state.streamer} went offline — auto-stopping`);
       state.isRunning = false;
       saveState();
+      stopSendCycle();
     }
     wasLive = isLive;
   } catch {
@@ -108,10 +149,12 @@ async function checkLiveStatus() {
         console.log(`${state.streamer} went live — auto-starting`);
         state.isRunning = true;
         saveState();
+        startSendCycle();
       } else if (!isLive && wasLive) {
         console.log(`${state.streamer} went offline — auto-stopping`);
         state.isRunning = false;
         saveState();
+        stopSendCycle();
       }
       wasLive = isLive;
     } catch {}
@@ -126,33 +169,37 @@ kickChat.on('message', (msg) => {
     return;
   }
 
-  // Skip our own messages (echo prevention)
   if (kickChat.botUserId && msg.sender.id === kickChat.botUserId) {
     console.log(`Skipping own message from ${msg.sender.username}`);
     return;
   }
 
-  console.log(`📥 Chat message from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
+  const formatted = `**${msg.sender.username}**: ${msg.content}`;
+  console.log(`📥 Pooling from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
+  state.messagePool.push(formatted);
+  if (state.messagePool.length > POOL_LIMIT) {
+    state.messagePool.splice(0, state.messagePool.length - POOL_LIMIT);
+  }
 
   if (state.channelId) {
-    discordBot.sendMessage(state.channelId, `📥 **${msg.sender.username}**: ${msg.content}`);
+    discordBot.sendMessage(state.channelId, `📥 ${formatted}`);
   }
 
-  if (state.isRunning) {
-    kickChat.sendMessage(msg.content);
-  }
+  saveState();
 });
 
 discordBot.on('start', () => {
   state.isRunning = true;
   saveState();
-  console.log('Forwarding enabled');
+  startSendCycle();
+  console.log('Send cycle started');
 });
 
 discordBot.on('stop', () => {
   state.isRunning = false;
   saveState();
-  console.log('Forwarding disabled');
+  stopSendCycle();
+  console.log('Send cycle stopped');
 });
 
 discordBot.on('setChannel', (channelId) => {
@@ -161,7 +208,9 @@ discordBot.on('setChannel', (channelId) => {
 });
 
 discordBot.on('setStreamer', (name) => {
+  stopSendCycle();
   state.streamer = name;
+  state.messagePool = [];
   saveState();
   kickChat.setStreamer(name);
 });
