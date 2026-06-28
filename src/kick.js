@@ -24,6 +24,7 @@ class KickChat extends EventEmitter {
     this.tokenExpiresAt = 0;
     this.refreshToken = null;
     this.authCallbackServer = null;
+    this.userAuthActive = false;
   }
 
   async curlFetch(url, options = {}) {
@@ -85,6 +86,10 @@ class KickChat extends EventEmitter {
   }
 
   async loginWithOAuth(clientId, clientSecret) {
+    if (this.userAuthActive) {
+      console.log('Skipping client_credentials — user token already active');
+      return;
+    }
     try {
       const body = new URLSearchParams({
         grant_type: 'client_credentials',
@@ -114,7 +119,18 @@ class KickChat extends EventEmitter {
   }
 
   async sendMessage(text) {
-    if (!this.chatroomId) return false;
+    if (!this.chatroomId) {
+      console.error('Send failed: no chatroomId');
+      return false;
+    }
+
+    if (this.accessToken && Date.now() >= this.tokenExpiresAt - 60000) {
+      console.log('Token expired or near expiry, refreshing...');
+      const refreshed = await this.refreshUserToken();
+      if (refreshed) {
+        this.emit('token', this.getUserTokenData());
+      }
+    }
 
     if (this.accessToken) {
       try {
@@ -132,7 +148,31 @@ class KickChat extends EventEmitter {
           })
         });
         if (res.ok) return true;
-        console.error('Send via API failed:', res.status);
+        const errBody = await res.text().catch(() => '');
+        console.error('Send via API failed:', res.status, errBody);
+
+        if (res.status === 403 || res.status === 401) {
+          try {
+            const raw = await this.curlFetch('https://api.kick.com/public/v1/chat', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              },
+              body: JSON.stringify({
+                type: 'user',
+                content: text,
+                broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
+              })
+            });
+            const parsed = JSON.parse(raw);
+            if (parsed.message_id || parsed.id) return true;
+            console.error('Send via curl API failed:', raw);
+          } catch (err) {
+            console.error('Send via curl API error:', err.message);
+          }
+        }
       } catch (err) {
         console.error('Send via API error:', err.message);
       }
@@ -163,10 +203,34 @@ class KickChat extends EventEmitter {
     return false;
   }
 
-  async setOAuthToken(token) {
+  async setOAuthToken(token, refresh, expiresAt) {
     this.accessToken = token;
+    this.refreshToken = refresh || null;
+    this.tokenExpiresAt = expiresAt || Date.now() + 3600000;
     this.loggedIn = true;
     console.log('OAuth token set for sending messages');
+  }
+
+  loadUserToken(data) {
+    if (data && data.accessToken) {
+      this.accessToken = data.accessToken;
+      this.refreshToken = data.refreshToken || null;
+      this.tokenExpiresAt = data.tokenExpiresAt || 0;
+      this.loggedIn = true;
+      this.userAuthActive = true;
+      console.log('User token restored from state');
+      return true;
+    }
+    return false;
+  }
+
+  getUserTokenData() {
+    if (!this.accessToken) return null;
+    return {
+      accessToken: this.accessToken,
+      refreshToken: this.refreshToken,
+      tokenExpiresAt: this.tokenExpiresAt
+    };
   }
 
   generatePKCEParams() {
@@ -246,7 +310,9 @@ class KickChat extends EventEmitter {
         this.refreshToken = data.refresh_token;
         this.tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
         this.loggedIn = true;
+        this.userAuthActive = true;
         console.log('User OAuth token obtained');
+        this.emit('token', this.getUserTokenData());
         return true;
       } else {
         console.error('Code exchange failed:', res.status, await res.text().catch(() => ''));
@@ -277,6 +343,7 @@ class KickChat extends EventEmitter {
         this.accessToken = data.access_token;
         this.refreshToken = data.refresh_token || this.refreshToken;
         this.tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+        this.emit('token', this.getUserTokenData());
         return true;
       }
     } catch {}

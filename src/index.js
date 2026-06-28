@@ -11,8 +11,10 @@ function startHealthServer(port, kc) {
     if (url.pathname === '/callback') {
       const code = url.searchParams.get('code');
       const s = url.searchParams.get('state');
-      if (code && s && kc.authVerifier) {
-        kc.exchangeCode(code, kc.authVerifier).then(ok => {
+      if (code && kc.authVerifier) {
+        const verifier = kc.authVerifier;
+        kc.authVerifier = null;
+        kc.exchangeCode(code, verifier).then(ok => {
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(ok ? '<h2>Authorized! Close this tab.</h2>' : '<h2>Failed</h2>');
         });
@@ -36,7 +38,8 @@ let state = {
   messagePool: [],
   channelId: null,
   isRunning: false,
-  streamer: process.env.KICK_STREAMER || 'hstikkytokky'
+  streamer: process.env.KICK_STREAMER || 'hstikkytokky',
+  userToken: null
 };
 
 function loadState() {
@@ -184,9 +187,20 @@ discordBot.on('setStreamer', (name) => {
 
 kickChat.connect();
 
+// Persist user token to state whenever it's obtained
+kickChat.on('token', (tokenData) => {
+  state.userToken = tokenData;
+  saveState();
+});
+
+// Restore user token from state on startup
+if (state.userToken) {
+  kickChat.loadUserToken(state.userToken);
+}
+
 const clientId = process.env.KICK_CLIENT_ID;
 const clientSecret = process.env.KICK_CLIENT_SECRET;
-if (clientId && clientSecret) {
+if (!kickChat.userAuthActive && clientId && clientSecret) {
   kickChat.loginWithOAuth(clientId, clientSecret);
 } else if (process.env.KICK_ACCESS_TOKEN) {
   kickChat.setOAuthToken(process.env.KICK_ACCESS_TOKEN);
