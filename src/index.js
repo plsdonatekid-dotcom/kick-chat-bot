@@ -10,18 +10,22 @@ function startHealthServer(port, kc) {
     const url = new URL(req.url, `http://localhost:${port}`);
     if (url.pathname === '/callback') {
       const code = url.searchParams.get('code');
-      const s = url.searchParams.get('state');
-      if (code && kc.authVerifier) {
-        const verifier = kc.authVerifier;
-        kc.authVerifier = null;
-        kc.exchangeCode(code, verifier).then(ok => {
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(ok ? '<h2>Authorized! Close this tab.</h2>' : '<h2>Failed</h2>');
-        });
-      } else {
+      if (!code) {
         res.writeHead(400, { 'Content-Type': 'text/html' });
-        res.end('<h2>Missing params</h2>');
+        res.end('<h2>Missing code param</h2>');
+        return;
       }
+      const verifier = kc.authVerifier;
+      if (!verifier) {
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end('<h2>No pending auth session. Run /auth first.</h2>');
+        return;
+      }
+      kc.authVerifier = null;
+      kc.exchangeCode(code, verifier).then(ok => {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(ok ? '<h2>Authorized! Close this tab.</h2>' : '<h2>Failed</h2>');
+      });
       return;
     }
     res.end('ok');
@@ -123,10 +127,10 @@ let wasLive = false;
 
 async function checkLiveStatus() {
   try {
-    const raw = await kickChat.curlFetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
+    const { body } = await kickChat.curlFetch(`https://kick.com/api/v2/channels/${state.streamer}`, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
-    const ch = JSON.parse(raw);
+    const ch = JSON.parse(body);
     const isLive = ch.livestream !== null;
     if (isLive && !wasLive && state.channelId) {
       console.log(`${state.streamer} went live — auto-starting`);

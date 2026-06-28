@@ -29,7 +29,7 @@ class KickChat extends EventEmitter {
 
   async curlFetch(url, options = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['-s', '-S'];
+      const args = ['-s', '-S', '-w', '\n%{http_code}'];
       if (options.method) args.push('-X', options.method);
       if (options.headers) {
         for (const [k, v] of Object.entries(options.headers)) {
@@ -38,9 +38,12 @@ class KickChat extends EventEmitter {
       }
       if (options.body) args.push('-d', options.body);
       args.push(url);
-      execFile('curl.exe', args, { timeout: 15000 }, (err, stdout, stderr) => {
+      execFile('curl.exe', args, { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
         if (err) return reject(err);
-        resolve(stdout);
+        const lines = stdout.trim().split('\n');
+        const statusCode = parseInt(lines.pop(), 10);
+        const body = lines.join('\n');
+        resolve({ statusCode, body });
       });
     });
   }
@@ -67,7 +70,7 @@ class KickChat extends EventEmitter {
     } catch {}
 
     try {
-      const raw = await this.curlFetch('https://kick.com/api/v2/mobile/login', {
+      const { body } = await this.curlFetch('https://kick.com/api/v2/mobile/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +78,7 @@ class KickChat extends EventEmitter {
         },
         body: JSON.stringify({ email, password })
       });
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(body);
       if (parsed.token) {
         this.loggedIn = true;
         console.log('Logged in to KICK');
@@ -127,14 +130,38 @@ class KickChat extends EventEmitter {
     if (this.accessToken && Date.now() >= this.tokenExpiresAt - 60000) {
       console.log('Token expired or near expiry, refreshing...');
       const refreshed = await this.refreshUserToken();
-      if (refreshed) {
-        this.emit('token', this.getUserTokenData());
-      }
+      if (refreshed) this.emit('token', this.getUserTokenData());
     }
 
     if (this.accessToken) {
+      // Try v1 API via curl (bypasses Cloudflare)
       try {
-        const res = await this.curlFetch(
+        const { statusCode, body } = await this.curlFetch('https://api.kick.com/public/v1/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          body: JSON.stringify({
+            type: 'user',
+            content: text,
+            broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
+          })
+        });
+        console.log('Send v1 uid=' + (this.broadcasterUserId || parseInt(this.chatroomId)) + ':', statusCode, body.slice(0, 300));
+        // Skip Cloudflare HTML pages and non-JSON responses
+        if (statusCode >= 200 && statusCode < 300 && (body.startsWith('{') || body.startsWith('['))) {
+          const parsed = JSON.parse(body);
+          if (parsed.data?.message_id || parsed.message_id || parsed.id) return true;
+        }
+      } catch (err) {
+        console.error('Send v1 error:', err.message);
+      }
+
+      // Try v2 API via curl with Bearer token
+      try {
+        const { statusCode, body } = await this.curlFetch(
           `https://kick.com/api/v2/chatrooms/${this.chatroomId}/messages/send`,
           {
             method: 'POST',
@@ -146,20 +173,43 @@ class KickChat extends EventEmitter {
             body: JSON.stringify({ content: text, type: 'message' })
           }
         );
-        const parsed = JSON.parse(res);
-        if (parsed.id || parsed.message_id) {
-          console.log('Send via v2 API success, id:', parsed.id || parsed.message_id);
-          return true;
+        console.log('Send v2 Bearer:', statusCode, body.slice(0, 300));
+        if (body.startsWith('{') || body.startsWith('[')) {
+          const parsed = JSON.parse(body);
+          if (parsed.id || parsed.message_id) return true;
         }
-        console.error('Send via v2 API returned no id:', res);
       } catch (err) {
-        console.error('Send via v2 API error:', err.message);
+        console.error('Send v2 Bearer error:', err.message);
+      }
+
+      // Try sending as bot type (app token fallback)
+      try {
+        const { statusCode, body } = await this.curlFetch('https://api.kick.com/public/v1/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          body: JSON.stringify({
+            type: 'bot',
+            content: text,
+            broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
+          })
+        });
+        console.log('Send v1 bot:', statusCode, body.slice(0, 300));
+        if (statusCode >= 200 && statusCode < 300 && (body.startsWith('{') || body.startsWith('['))) {
+          const parsed = JSON.parse(body);
+          if (parsed.data?.message_id || parsed.message_id || parsed.id) return true;
+        }
+      } catch (err) {
+        console.error('Send v1 bot error:', err.message);
       }
     }
 
     if (this.loggedIn && this.cookies) {
       try {
-        const res = await this.curlFetch(
+        const { statusCode, body } = await this.curlFetch(
           `https://kick.com/api/v2/chatrooms/${this.chatroomId}/messages/send`,
           {
             method: 'POST',
@@ -171,11 +221,11 @@ class KickChat extends EventEmitter {
             body: JSON.stringify({ content: text, type: 'message' })
           }
         );
-        const parsed = JSON.parse(res);
+        console.log('Send cookies:', statusCode, body.slice(0, 300));
+        const parsed = JSON.parse(body);
         if (parsed.id) return true;
-        console.error('Send via cookies failed:', res);
       } catch (err) {
-        console.error('Send via curl error:', err.message);
+        console.error('Send cookies error:', err.message);
       }
     }
 
@@ -335,8 +385,8 @@ class KickChat extends EventEmitter {
       this.chatroomId = manualId;
       console.log(`Using manual chatroom ID: ${this.chatroomId}`);
       try {
-        const raw = await this.curlFetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const ch = JSON.parse(raw);
+        const { body } = await this.curlFetch(`https://kick.com/api/v2/channels/${this.streamerName}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const ch = JSON.parse(body);
         if (ch.user_id) this.broadcasterUserId = ch.user_id;
       } catch {}
       this.connectPusher();
@@ -376,8 +426,8 @@ class KickChat extends EventEmitter {
 
       for (const url of urls) {
         try {
-          const raw = await this.curlFetch(url, { headers });
-          const data = JSON.parse(raw);
+          const { body } = await this.curlFetch(url, { headers });
+          const data = JSON.parse(body);
           this.chatroomId = data.chatroom?.id || data.id;
           if (data.user_id) this.broadcasterUserId = data.user_id;
           if (this.chatroomId) {
