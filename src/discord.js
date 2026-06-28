@@ -80,22 +80,11 @@ class DiscordBot extends EventEmitter {
           await interaction.editReply(ok ? 'Authorized! Try /send hello' : 'Authorization failed. Try /auth again.');
           break;
         }
-        case 'pool':
-          await interaction.reply(
-            `**Pool:** ${this.state.messagePool.length} messages\n` +
-            this.state.messagePool.slice(-5).map(m => `- ${m}`).join('\n') || '(empty)'
-          );
-          break;
-        case 'clear':
-          this.state.messagePool = [];
-          this.saveState();
-          await interaction.reply('Message pool cleared.');
-          break;
         case 'status': {
           const running = this.state.isRunning ? 'Running' : 'Stopped';
           const channel = this.state.channelId ? `<#${this.state.channelId}>` : 'Not set';
           await interaction.reply(
-            `**Status:** ${running}\n**Channel:** ${channel}\n**Pool:** ${this.state.messagePool.length} messages\n**Streamer:** ${this.state.streamer}`
+            `**Status:** ${running}\n**Channel:** ${channel}\n**Streamer:** ${this.state.streamer}`
           );
           break;
         }
@@ -130,12 +119,6 @@ class DiscordBot extends EventEmitter {
         .setName('send')
         .setDescription('Send a message to KICK chat')
         .addStringOption(o => o.setName('message').setDescription('Message text').setRequired(true)),
-      new SlashCommandBuilder()
-        .setName('pool')
-        .setDescription('Show pooled messages'),
-      new SlashCommandBuilder()
-        .setName('clear')
-        .setDescription('Clear the message pool'),
       new SlashCommandBuilder()
         .setName('msgview')
         .setDescription('Set channel where messages are sent')

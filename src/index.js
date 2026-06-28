@@ -39,7 +39,6 @@ function startHealthServer(port, kc) {
 const STATE_FILE = path.join(__dirname, '..', 'state.json');
 
 let state = {
-  messagePool: [],
   channelId: null,
   isRunning: false,
   streamer: process.env.KICK_STREAMER || 'hstikkytokky',
@@ -77,52 +76,6 @@ const kickChat = new KickChat(state.streamer);
 const discordBot = new DiscordBot(state, saveState, kickChat);
 startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
-let sendTimer = null;
-let currentMessage = null;
-let sendStage = 0; // 0=pick, 1=first send, 2=second send
-
-function stopSendLoop() {
-  if (sendTimer) {
-    clearTimeout(sendTimer);
-    sendTimer = null;
-  }
-  currentMessage = null;
-  sendStage = 0;
-}
-
-function nextSendCycle() {
-  if (!state.isRunning || !state.channelId) return;
-
-  if (sendStage === 0) {
-    if (state.messagePool.length === 0) {
-      sendTimer = setTimeout(nextSendCycle, 10000);
-      return;
-    }
-    currentMessage = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
-    sendStage = 1;
-  }
-
-  const rawContent = currentMessage.replace(/\*\*.*?\*\*:\s*/, '');
-  kickChat.sendMessage(rawContent);
-  discordBot.sendMessage(state.channelId, `➡️ ${currentMessage}`);
-
-  if (sendStage === 1) {
-    sendStage = 2;
-    sendTimer = setTimeout(nextSendCycle, 15000);
-  } else {
-    sendStage = 0;
-    sendTimer = setTimeout(nextSendCycle, 30000);
-  }
-}
-
-function startSendLoop() {
-  stopSendLoop();
-  sendStage = 0;
-  sendTimer = setTimeout(nextSendCycle, 1000);
-}
-
-const POOL_LIMIT = 500;
-
 let wasLive = false;
 
 async function checkLiveStatus() {
@@ -138,12 +91,10 @@ async function checkLiveStatus() {
       console.log(`${state.streamer} went live — auto-starting`);
       state.isRunning = true;
       saveState();
-      startSendLoop();
     } else if (!isLive && wasLive) {
       console.log(`${state.streamer} went offline — auto-stopping`);
       state.isRunning = false;
       saveState();
-      stopSendLoop();
     }
     wasLive = isLive;
   } catch {
@@ -157,12 +108,10 @@ async function checkLiveStatus() {
         console.log(`${state.streamer} went live — auto-starting`);
         state.isRunning = true;
         saveState();
-        startSendLoop();
       } else if (!isLive && wasLive) {
         console.log(`${state.streamer} went offline — auto-stopping`);
         state.isRunning = false;
         saveState();
-        stopSendLoop();
       }
       wasLive = isLive;
     } catch {}
@@ -176,30 +125,34 @@ kickChat.on('message', (msg) => {
     console.log('Pusher raw message (skipped):', JSON.stringify(msg).slice(0, 300));
     return;
   }
-  const formatted = `**${msg.sender.username}**: ${msg.content}`;
-  console.log(`📥 Chat message from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
-  state.messagePool.push(formatted);
-  if (state.messagePool.length > POOL_LIMIT) {
-    state.messagePool.splice(0, state.messagePool.length - POOL_LIMIT);
+
+  // Skip our own messages (echo prevention)
+  if (kickChat.botUserId && msg.sender.id === kickChat.botUserId) {
+    console.log(`Skipping own message from ${msg.sender.username}`);
+    return;
   }
+
+  console.log(`📥 Chat message from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
 
   if (state.channelId) {
-    discordBot.sendMessage(state.channelId, `📥 ${formatted}`);
+    discordBot.sendMessage(state.channelId, `📥 **${msg.sender.username}**: ${msg.content}`);
   }
 
-  saveState();
+  if (state.isRunning) {
+    kickChat.sendMessage(msg.content);
+  }
 });
 
 discordBot.on('start', () => {
   state.isRunning = true;
   saveState();
-  startSendLoop();
+  console.log('Forwarding enabled');
 });
 
 discordBot.on('stop', () => {
   state.isRunning = false;
   saveState();
-  stopSendLoop();
+  console.log('Forwarding disabled');
 });
 
 discordBot.on('setChannel', (channelId) => {
@@ -208,9 +161,7 @@ discordBot.on('setChannel', (channelId) => {
 });
 
 discordBot.on('setStreamer', (name) => {
-  stopSendLoop();
   state.streamer = name;
-  state.messagePool = [];
   saveState();
   kickChat.setStreamer(name);
 });
@@ -221,6 +172,7 @@ kickChat.connect();
 kickChat.on('token', (tokenData) => {
   state.userToken = tokenData;
   saveState();
+  kickChat.fetchBotUserId();
 });
 
 // Restore user token from state on startup

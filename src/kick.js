@@ -27,6 +27,7 @@ class KickChat extends EventEmitter {
     this.refreshToken = null;
     this.authCallbackServer = null;
     this.userAuthActive = false;
+    this.botUserId = parseInt(process.env.KICK_BOT_USER_ID) || null;
   }
 
   async curlFetch(url, options = {}) {
@@ -402,6 +403,25 @@ class KickChat extends EventEmitter {
       }
     } catch {}
     return false;
+  }
+
+  async fetchBotUserId() {
+    if (!this.accessToken) return null;
+    try {
+      const res = await fetch('https://api.kick.com/public/v1/users/me', {
+        headers: { 'Authorization': `Bearer ${this.accessToken}`, 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const id = data.data?.user_id || data.user_id;
+        if (id) {
+          this.botUserId = id;
+          console.log('Bot user ID set to', id);
+        }
+        return id;
+      }
+    } catch {}
+    return null;
   }
 
   async fetchChannelInfo() {
