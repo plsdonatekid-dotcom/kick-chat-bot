@@ -4,6 +4,7 @@ const fs = require('fs');
 const http = require('http');
 const KickChat = require('./kick');
 const DiscordBot = require('./discord');
+const { rephrase } = require('./ai');
 
 function startHealthServer(port, kc) {
   const server = http.createServer((req, res) => {
@@ -90,11 +91,13 @@ async function sendCycle() {
 
   const entry = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
   const rawContent = entry.replace(/\*\*.*?\*\*:\s*/, '');
-  console.log('Sending:', rawContent.slice(0, 80));
+  const rephrased = await rephrase(rawContent);
+  const toSend = rephrased || rawContent;
+  console.log('Sending:', (rephrased ? '[AI] ' : '') + toSend.slice(0, 80));
 
-  await kickChat.sendMessage(rawContent);
+  await kickChat.sendMessage(toSend);
   if (state.channelId) {
-    discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
+    discordBot.sendMessage(state.channelId, `➡️ ${rephrased ? `*${toSend}* (was: ${rawContent})` : entry}`);
   }
 
   sendTimer = setTimeout(sendCycle, 800);
