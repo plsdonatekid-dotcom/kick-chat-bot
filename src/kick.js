@@ -134,47 +134,26 @@ class KickChat extends EventEmitter {
 
     if (this.accessToken) {
       try {
-        const res = await fetch('https://api.kick.com/public/v1/chat', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-          },
-          body: JSON.stringify({
-            type: 'user',
-            content: text,
-            broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
-          })
-        });
-        if (res.ok) return true;
-        const errBody = await res.text().catch(() => '');
-        console.error('Send via API failed:', res.status, errBody);
-
-        if (res.status === 403 || res.status === 401) {
-          try {
-            const raw = await this.curlFetch('https://api.kick.com/public/v1/chat', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              },
-              body: JSON.stringify({
-                type: 'user',
-                content: text,
-                broadcaster_user_id: this.broadcasterUserId || parseInt(this.chatroomId)
-              })
-            });
-            const parsed = JSON.parse(raw);
-            if (parsed.message_id || parsed.id) return true;
-            console.error('Send via curl API failed:', raw);
-          } catch (err) {
-            console.error('Send via curl API error:', err.message);
+        const res = await this.curlFetch(
+          `https://kick.com/api/v2/chatrooms/${this.chatroomId}/messages/send`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            body: JSON.stringify({ content: text, type: 'message' })
           }
+        );
+        const parsed = JSON.parse(res);
+        if (parsed.id || parsed.message_id) {
+          console.log('Send via v2 API success, id:', parsed.id || parsed.message_id);
+          return true;
         }
+        console.error('Send via v2 API returned no id:', res);
       } catch (err) {
-        console.error('Send via API error:', err.message);
+        console.error('Send via v2 API error:', err.message);
       }
     }
 
@@ -193,10 +172,10 @@ class KickChat extends EventEmitter {
           }
         );
         const parsed = JSON.parse(res);
-        return !!parsed.id;
+        if (parsed.id) return true;
+        console.error('Send via cookies failed:', res);
       } catch (err) {
         console.error('Send via curl error:', err.message);
-        return false;
       }
     }
 
