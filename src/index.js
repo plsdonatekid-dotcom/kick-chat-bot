@@ -81,7 +81,7 @@ const POOL_LIMIT = 500;
 let sendTimer = null;
 
 async function sendCycle() {
-  if (!state.isRunning || !state.channelId) return;
+  if (!state.isRunning) return;
 
   if (state.messagePool.length === 0) {
     sendTimer = setTimeout(sendCycle, 10000);
@@ -93,7 +93,9 @@ async function sendCycle() {
   console.log('Sending:', rawContent.slice(0, 80));
 
   await kickChat.sendMessage(rawContent);
-  discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
+  if (state.channelId) {
+    discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
+  }
 
   sendTimer = setTimeout(sendCycle, 800);
 }
