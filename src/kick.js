@@ -233,7 +233,6 @@ class KickChat extends EventEmitter {
         client_secret: process.env.KICK_CLIENT_SECRET,
         code,
         redirect_uri: this.getRedirectUri(),
-        code_verifier: verifier,
       });
       const res = await fetch('https://id.kick.com/oauth/token', {
         method: 'POST',
