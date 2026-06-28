@@ -5,14 +5,30 @@ const http = require('http');
 const KickChat = require('./kick');
 const DiscordBot = require('./discord');
 
-function startHealthServer(port) {
-  const server = http.createServer((req, res) => res.end('ok'));
+function startHealthServer(port, kc) {
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://localhost:${port}`);
+    if (url.pathname === '/callback') {
+      const code = url.searchParams.get('code');
+      const s = url.searchParams.get('state');
+      if (code && s && kc.authVerifier) {
+        kc.exchangeCode(code, kc.authVerifier).then(ok => {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(ok ? '<h2>Authorized! Close this tab.</h2>' : '<h2>Failed</h2>');
+        });
+      } else {
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end('<h2>Missing params</h2>');
+      }
+      return;
+    }
+    res.end('ok');
+  });
   server.on('error', () => {
-    if (port < 3005) startHealthServer(port + 1);
+    if (port < 3005) startHealthServer(port + 1, kc);
   });
   server.listen(port, () => console.log(`Health server on port ${port}`));
 }
-startHealthServer(parseInt(process.env.PORT) || 3000);
 
 const STATE_FILE = path.join(__dirname, '..', 'state.json');
 
@@ -52,6 +68,7 @@ saveState();
 
 const kickChat = new KickChat(state.streamer);
 const discordBot = new DiscordBot(state, saveState, kickChat);
+startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
 let sendTimer = null;
 let currentMessage = null;

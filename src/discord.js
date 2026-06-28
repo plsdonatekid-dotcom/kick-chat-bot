@@ -54,11 +54,11 @@ class DiscordBot extends EventEmitter {
           const pkce = this.kickChat.generatePKCEParams();
           this.kickChat.authVerifier = pkce.verifier;
           const url = this.kickChat.getAuthorizationUrl(pkce.verifier, pkce.challenge);
+          const redirect = this.kickChat.getRedirectUri();
           await interaction.reply(
-            `1. Visit this URL and authorize:\n${url}\n\n` +
-            `2. After authorizing, the browser will show "connection refused" — ` +
-            `copy the ENTIRE address bar URL and paste it here with:\n` +
-            `/cb <paste_url_here>`
+            `**Make sure** your Kick app has this exact redirect URI:\n\`${redirect}\`\n\n` +
+            `Then visit this URL and authorize:\n${url}\n\n` +
+            `After authorizing, the bot will handle the callback automatically.`
           );
           break;
         }
