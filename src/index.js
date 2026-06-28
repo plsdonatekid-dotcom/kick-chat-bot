@@ -100,7 +100,7 @@ async function sendCycle() {
     discordBot.sendMessage(state.channelId, `➡️ ${rephrased ? `*${toSend}* (was: ${rawContent})` : entry}`);
   }
 
-  sendTimer = setTimeout(sendCycle, 800);
+  sendTimer = setTimeout(sendCycle, 1200);
 }
 
 function startSendCycle() {
