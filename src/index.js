@@ -95,12 +95,7 @@ async function sendCycle() {
   await kickChat.sendMessage(rawContent);
   discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
 
-  setTimeout(async () => {
-    await kickChat.sendMessage(rawContent);
-    discordBot.sendMessage(state.channelId, `➡️ ${entry}`);
-
-    sendTimer = setTimeout(sendCycle, 20000);
-  }, 700);
+  sendTimer = setTimeout(sendCycle, 800);
 }
 
 function startSendCycle() {
