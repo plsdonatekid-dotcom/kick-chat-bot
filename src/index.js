@@ -10,7 +10,7 @@ const { rephrase } = require('./ai');
 function stripEmojis(text) {
   if (!text) return text;
   let t = text.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
-  t = t.replace(/\{emoji:\d+\}/gi, '');
+  t = t.replace(/\{(?:emote|emoji)[^}]*\}?/gi, '');
   t = t.replace(emojiRegex(), '');
   t = t.replace(/\s{2,}/g, ' ').trim();
   return t;
