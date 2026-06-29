@@ -527,13 +527,12 @@ function repeatLetters(text) {
   }).join(' ');
 }
 
+const emojiRegex = require('emoji-regex');
+
 function stripEmojis(text) {
-  let t = text;
-  // Remove Discord-style :emoji: and :emoji name: placeholders
-  t = t.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
-  // Remove unicode emojis and symbols
-  t = t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E0}-\u{1F1FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{FE00}-\u{FE0F}\u{200D}\u{231A}-\u{23FF}]/gu, '');
-  // Clean up multiple spaces
+  if (!text) return text;
+  let t = text.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
+  t = t.replace(emojiRegex(), '');
   t = t.replace(/\s{2,}/g, ' ').trim();
   return t;
 }

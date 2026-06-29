@@ -4,14 +4,13 @@ const fs = require('fs');
 const http = require('http');
 const KickChat = require('./kick');
 const DiscordBot = require('./discord');
+const emojiRegex = require('emoji-regex');
 const { rephrase } = require('./ai');
 
 function stripEmojis(text) {
   if (!text) return text;
-  // Remove Discord-style :emoji: and :emoji name: placeholders
   let t = text.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
-  // Remove unicode emojis (extended pictographic range + common emoji ranges)
-  t = t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E0}-\u{1F1FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{231A}-\u{23FF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '');
+  t = t.replace(emojiRegex(), '');
   t = t.replace(/\s{2,}/g, ' ').trim();
   return t;
 }
