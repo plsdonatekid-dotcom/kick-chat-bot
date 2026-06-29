@@ -88,7 +88,22 @@ const discordBot = new DiscordBot(state, saveState, kickChat);
 startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
 const POOL_LIMIT = 500;
-const replyStages = new Map();
+const replyTriggers = [
+  { match: /\b(boring|not funny|unfunny|dry|dead)\b/i, responses: ["That's your thought", "Your opinion", "Don't watch then", "Noted", "Cool story"] },
+  { match: /\b(shut up|stfu|shut it|shush)\b/i, responses: ["Make me", "No u", "You first", "Cry more", "Nah"] },
+  { match: /\b(stupid|dumb|braindead|retard|idiot|moron)\b/i, responses: ["Takes one to know one", "Says you", "Look in a mirror", "Whatever helps you sleep", "Cry about it"] },
+  { match: /\b(stop|go away|leave|begone)\b/i, responses: ["No", "Make me", "You can't get rid of me that easy", "Never", "Deal with it"] },
+  { match: /\b(who are you|who tf|who even|who dis|who this)\b/i, responses: ["Just a bot", "Nobody important", "Your worst nightmare", "Wouldn't you like to know", "I get that a lot"] },
+  { match: /\b(bad|trash|awful|terrible|garbage|shit|wack|ass)\b/i, responses: ["Sorry you feel that way", "Don't care", "Ok bro", "Cry", "Stay mad"] },
+  { match: /\b(good|nice|fire|lit|dope|sick|class)\b/i, responses: ["Thanks", "Glad you rate it", "I know", "Appreciate you", "Facts"] },
+  { match: /\b(hello|hi|hey|sup|yo|wagwan)\b/i, responses: ["Sup", "Yo", "Hello", "Hey", "Wagwan"] },
+  { match: /\b(lol|lmao|lmfao|haha| hilarious|funny)\b/i, responses: ["Glad you're entertained", "I try", "You're easily amused", "Stay laughing"] },
+  { match: /\b(cry|coping|ratio|mad|salty|upset|angry)\b/i, responses: ["Not reading all that", "Stay mad", "Cope", "You sound upset", "It's not that deep"] },
+  { match: /\b(bot|ai|automated|not real)\b/i, responses: ["Beep boop", "I'm a real person I swear", "How do you know", "That's what they want you to think", "01001000 01101001"] },
+  { match: /\b(thanks|ty|thx|appreciate|good looks)\b/i, responses: ["No problem", "Anytime", "You're welcome", "Safe", "Ofc"] },
+  { match: /\b(love|rate|fuck with|goat)\b/i, responses: ["Love you too", "I know", "Same", "Respect", "You're not bad yourself"] },
+  { match: /\b(hate|dislike|can't stand)\b/i, responses: ["Noted", "Ok", "Don't care", "Why are you still here then", "Cry about it"] },
+];
 let sendTimer = null;
 let lastRepeatMsg = null;
 let repeatCount = 0;
@@ -205,11 +220,19 @@ kickChat.on('message', async (msg) => {
   if (isBotReply) {
     console.log(`Bot-directed from ${msg.sender.username}: "${msg.content}"`);
     const clean = stripEmojis(msg.content);
-    const response = await rephrase(clean);
-    if (response && response.length > 1) {
-      console.log(`Replying: "${response}"`);
-      await kickChat.sendMessage(response);
+    let response = null;
+    for (const trigger of replyTriggers) {
+      if (trigger.match.test(clean)) {
+        response = trigger.responses[Math.floor(Math.random() * trigger.responses.length)];
+        break;
+      }
     }
+    if (!response) {
+      const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
+      response = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+    console.log(`Replying: "${response}"`);
+    await kickChat.sendMessage(response);
     return;
   }
 
