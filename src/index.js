@@ -90,16 +90,29 @@ startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 const POOL_LIMIT = 500;
 const replyStages = new Map();
 let sendTimer = null;
+let lastRepeatMsg = null;
+let repeatCount = 0;
 
 async function sendCycle() {
   if (!state.isRunning) return;
 
   if (state.messagePool.length === 0) {
+    lastRepeatMsg = null;
+    repeatCount = 0;
     sendTimer = setTimeout(sendCycle, 10000);
     return;
   }
 
-  const entry = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
+  let entry;
+  if (lastRepeatMsg && repeatCount < 2 && Math.random() < (repeatCount === 1 ? 0.3 : 0.08)) {
+    entry = lastRepeatMsg;
+    repeatCount++;
+  } else {
+    entry = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
+    lastRepeatMsg = entry;
+    repeatCount = 0;
+  }
+
   const rawContent = entry.replace(/\*\*.*?\*\*:\s*/, '');
   const toSend = await rephrase(rawContent);
   const isRephrased = toSend !== rawContent;
