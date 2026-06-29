@@ -197,11 +197,14 @@ kickChat.on('message', async (msg) => {
     return;
   }
 
-  // Detect replies to the bot
-  const replyTo = msg.reply_message || msg.reply_to || msg.metadata?.reply_to || msg.metadata?.reply_message;
-  if (replyTo && kickChat.botUserId && replyTo.sender?.id === kickChat.botUserId) {
-    console.log(`Reply detected from ${msg.sender.username}: "${msg.content}" replying to bot`);
-    const replies0 = ["Who are you bruh", "Who tf are you", "Who are you bro", "Who are you man", "Who's this", "Who even are you", "You good bro", "Who asked you", "Do I know u", "Who's this dude", "You know me or something", "Who's this guy", "Who tf do you think you are", "Excuse me who are you", "Hello who is this", "Bro who are you", "Who da hell are you", "Who's this random", "Since when do I know you", "Who are you lol", "Who tf is you", "Watch who you're talking to", "You're talking to me bro", "Who do you think you're talking to", "Are you talking to me", "You talking to me", "Why are you talking to me", "You know me?"];
+  // Detect replies or @mentions directed at the bot
+  const repliedToBot = (msg.reply_message || msg.reply_to || msg.metadata?.reply_to || msg.metadata?.reply_message);
+  const mentionedBot = kickChat.botUsername && new RegExp(`@${kickChat.botUsername}\\b`, 'i').test(msg.content);
+  const isBotReply = (repliedToBot && kickChat.botUserId && repliedToBot.sender?.id === kickChat.botUserId) || mentionedBot;
+
+  if (isBotReply) {
+    console.log(`Bot-directed from ${msg.sender.username}: "${msg.content}"`);
+    const replies0 = ["Bro who even are you", "Who are you bruh", "Who tf are you", "Who are you bro", "Who are you man", "Who's this", "Who even are you", "You good bro", "Who asked you", "Do I know u", "Who's this dude", "You know me or something", "Who's this guy", "Who tf do you think you are", "Excuse me who are you", "Hello who is this", "Bro who are you", "Who da hell are you", "Who's this random", "Since when do I know you", "Who are you lol", "Who tf is you", "Watch who you're talking to", "You're talking to me bro", "Who do you think you're talking to", "Are you talking to me", "You talking to me", "Why are you talking to me", "You know me?"];
     const replies1 = ["I dont care lol", "I don't care", "Idc", "Not interested", "I do not care bro", "Bruh I don't care", "Keep it to yourself", "Nobody asked", "Don't care", "Who cares man", "I care less", "Couldn't care less", "Bro I do not care", "Literally who cares", "And I care because?", "Why would I care", "Does it look like I care", "I don't care tbh", "Not my problem", "Cba", "Not bothered", "I'm good", "You're boring me", "Alright calm down", "Go on then", "Yeah okay cool", "Whatever you say", "Interesting but I don't care", "I didn't ask tho", "Idk man"];
 
     const stage = replyStages.get(msg.sender.id) || 0;
