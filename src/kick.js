@@ -28,7 +28,7 @@ class KickChat extends EventEmitter {
     this.authCallbackServer = null;
     this.userAuthActive = false;
     this.botUserId = parseInt(process.env.KICK_BOT_USER_ID) || null;
-    this.botUsername = null;
+    this.botUsername = process.env.KICK_BOT_USERNAME || null;
   }
 
   async curlFetch(url, options = {}) {
@@ -117,6 +117,7 @@ class KickChat extends EventEmitter {
         this.tokenExpiresAt = Date.now() + (data.expires_in || 3600) * 1000;
         this.loggedIn = true;
         console.log('Logged in to KICK via OAuth');
+        this.emit('token', this.getUserTokenData());
       } else {
         console.error('OAuth login failed:', res.status, await res.text().catch(() => ''));
       }
@@ -265,6 +266,7 @@ class KickChat extends EventEmitter {
     this.tokenExpiresAt = expiresAt || Date.now() + 3600000;
     this.loggedIn = true;
     console.log('OAuth token set for sending messages');
+    this.fetchBotUserId();
   }
 
   loadUserToken(data) {

@@ -89,18 +89,42 @@ const discordBot = new DiscordBot(state, saveState, kickChat);
 startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
 const POOL_LIMIT = 500;
-const triggersPath = path.join(__dirname, '..', 'triggers.json');
-const replyTriggers = (() => {
-  try {
-    const raw = fs.readFileSync(triggersPath, 'utf8');
-    const data = JSON.parse(raw);
-    return data.map(t => ({ match: new RegExp(t.match, 'i'), responses: t.responses }));
-  } catch (e) {
-    console.error('Failed to load triggers.json:', e.message);
-    return [];
+async function generateReply(messageContent, senderName) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
+    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
-})();
-console.log(`Loaded ${replyTriggers.length} reply triggers`);
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `You are a Kick chat bot with a sarcastic, banter-heavy personality. Keep responses VERY short (under 12 words). Reply to ${senderName}: "${messageContent}"`
+            }]
+          }],
+          generationConfig: { maxOutputTokens: 30, temperature: 0.9 }
+        })
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text.trim().slice(0, 150);
+    }
+  } catch (err) {
+    console.error('Gemini error:', err.message);
+  }
+
+  const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
 let sendTimer = null;
 let lastRepeatMsg = null;
 let repeatCount = 0;
@@ -217,17 +241,7 @@ kickChat.on('message', async (msg) => {
   if (isBotReply) {
     console.log(`Bot-directed from ${msg.sender.username}: "${msg.content}"`);
     const clean = stripEmojis(msg.content);
-    let response = null;
-    for (const trigger of replyTriggers) {
-      if (trigger.match.test(clean)) {
-        response = trigger.responses[Math.floor(Math.random() * trigger.responses.length)];
-        break;
-      }
-    }
-    if (!response) {
-      const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
-      response = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-    }
+    const response = await generateReply(clean, msg.sender.username);
     console.log(`Replying: "${response}"`);
     await kickChat.sendMessage(response);
     return;
