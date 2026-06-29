@@ -204,20 +204,11 @@ kickChat.on('message', async (msg) => {
 
   if (isBotReply) {
     console.log(`Bot-directed from ${msg.sender.username}: "${msg.content}"`);
-    const replies0 = ["Bro who even are you", "Who are you bruh", "Who tf are you", "Who are you bro", "Who are you man", "Who's this", "Who even are you", "You good bro", "Who asked you", "Do I know u", "Who's this dude", "You know me or something", "Who's this guy", "Who tf do you think you are", "Excuse me who are you", "Hello who is this", "Bro who are you", "Who da hell are you", "Who's this random", "Since when do I know you", "Who are you lol", "Who tf is you", "Watch who you're talking to", "You're talking to me bro", "Who do you think you're talking to", "Are you talking to me", "You talking to me", "Why are you talking to me", "You know me?"];
-    const replies1 = ["I dont care lol", "I don't care", "Idc", "Not interested", "I do not care bro", "Bruh I don't care", "Keep it to yourself", "Nobody asked", "Don't care", "Who cares man", "I care less", "Couldn't care less", "Bro I do not care", "Literally who cares", "And I care because?", "Why would I care", "Does it look like I care", "I don't care tbh", "Not my problem", "Cba", "Not bothered", "I'm good", "You're boring me", "Alright calm down", "Go on then", "Yeah okay cool", "Whatever you say", "Interesting but I don't care", "I didn't ask tho", "Idk man"];
-
-    const stage = replyStages.get(msg.sender.id) || 0;
-    if (stage === 0) {
-      const response = replies0[Math.floor(Math.random() * replies0.length)];
+    const clean = stripEmojis(msg.content);
+    const response = await rephrase(clean);
+    if (response && response.length > 1) {
       console.log(`Replying: "${response}"`);
       await kickChat.sendMessage(response);
-      replyStages.set(msg.sender.id, 1);
-    } else if (stage === 1) {
-      const response = replies1[Math.floor(Math.random() * replies1.length)];
-      console.log(`Replying: "${response}"`);
-      await kickChat.sendMessage(response);
-      replyStages.set(msg.sender.id, 2);
     }
     return;
   }
