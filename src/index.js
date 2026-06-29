@@ -6,6 +6,16 @@ const KickChat = require('./kick');
 const DiscordBot = require('./discord');
 const { rephrase } = require('./ai');
 
+function stripEmojis(text) {
+  if (!text) return text;
+  // Remove Discord-style :emoji: and :emoji name: placeholders
+  let t = text.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
+  // Remove unicode emojis (extended pictographic range + common emoji ranges)
+  t = t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E0}-\u{1F1FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{231A}-\u{23FF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '');
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  return t;
+}
+
 function startHealthServer(port, kc) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://localhost:${port}`);
@@ -92,7 +102,7 @@ async function sendCycle() {
 
   const entry = state.messagePool[Math.floor(Math.random() * state.messagePool.length)];
   const rawContent = entry.replace(/\*\*.*?\*\*:\s*/, '');
-  const toSend = rephrase(rawContent);
+  const toSend = await rephrase(rawContent);
   const isRephrased = toSend !== rawContent;
   console.log('Sending:', (isRephrased ? '[reworded] ' : '') + toSend.slice(0, 80));
 
@@ -101,7 +111,7 @@ async function sendCycle() {
     discordBot.sendMessage(state.channelId, `➡️ ${isRephrased ? `*${toSend}* (was: ${rawContent})` : entry}`);
   }
 
-  sendTimer = setTimeout(sendCycle, 1500);
+  sendTimer = setTimeout(sendCycle, 1714);
 }
 
 function startSendCycle() {
@@ -197,8 +207,9 @@ kickChat.on('message', async (msg) => {
     return;
   }
 
-  const formatted = `**${msg.sender.username}**: ${msg.content}`;
-  console.log(`📥 Pooling from ${msg.sender.username}: ${msg.content.slice(0, 100)}`);
+  const cleanContent = stripEmojis(msg.content);
+  const formatted = `**${msg.sender.username}**: ${cleanContent}`;
+  console.log(`📥 Pooling from ${msg.sender.username}: ${cleanContent.slice(0, 100)}`);
   state.messagePool.push(formatted);
   if (state.messagePool.length > POOL_LIMIT) {
     state.messagePool.splice(0, state.messagePool.length - POOL_LIMIT);

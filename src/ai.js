@@ -340,6 +340,23 @@ const swaps = {
   disadvantage: ['downside', 'drawback', 'handicap', 'weakness'],
 };
 
+const synonymCache = new Map();
+
+async function fetchSynonyms(word) {
+  if (synonymCache.has(word)) return synonymCache.get(word);
+  try {
+    const res = await fetch(`https://api.datamuse.com/words?rel_syn=${encodeURIComponent(word)}&max=5`);
+    if (res.ok) {
+      const data = await res.json();
+      const syns = data.map(d => d.word).filter(w => w !== word);
+      synonymCache.set(word, syns);
+      return syns;
+    }
+  } catch {}
+  synonymCache.set(word, []);
+  return [];
+}
+
 const prefixes = ['', 'yo ', 'bro ', 'ngl ', 'fr ', 'tbh ', 'bruh ', 'aint gonna lie ', 'nbs ', 'icb ', 'lowkey ', 'highkey '];
 const suffixes = ['', ' ngl', ' fr', ' tbh', ' icl', ' on god', ' deadass', ' for real', ' no cap', ' fr fr', ' swear down', ' init', ' innit', ' you get me', ' you feel me'];
 
@@ -353,12 +370,12 @@ function randomReplace(word) {
   if (!lower) return word;
 
   // Check dictionary first
-  if (swaps[lower] && Math.random() < 0.5) {
+  if (swaps[lower]) {
     return randomChoice(swaps[lower]) + punct;
   }
 
   // Algorithmic transformations for any word not in dictionary
-  if (Math.random() < 0.25) {
+  if (Math.random() < 0.5) {
     let t = lower;
 
     // Verb tense slangifications
@@ -469,10 +486,10 @@ function applyContractions(text) {
 
 function addRandomPrefixSuffix(text) {
   let t = text;
-  if (Math.random() < 0.3) {
+  if (Math.random() < 0.5) {
     t = randomChoice(prefixes) + t;
   }
-  if (Math.random() < 0.25) {
+  if (Math.random() < 0.4) {
     t = t + randomChoice(suffixes);
   }
   return t;
@@ -510,10 +527,21 @@ function repeatLetters(text) {
   }).join(' ');
 }
 
-function rephrase(text) {
+function stripEmojis(text) {
+  let t = text;
+  // Remove Discord-style :emoji: and :emoji name: placeholders
+  t = t.replace(/:\s*\w+(?:\s+\w+)*\s*:/g, '');
+  // Remove unicode emojis and symbols
+  t = t.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E0}-\u{1F1FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{FE00}-\u{FE0F}\u{200D}\u{231A}-\u{23FF}]/gu, '');
+  // Clean up multiple spaces
+  t = t.replace(/\s{2,}/g, ' ').trim();
+  return t;
+}
+
+async function rephrase(text) {
   if (!text || text.length < 2) return text;
 
-  let result = text;
+  let result = stripEmojis(text);
 
   const transforms = [
     replaceWords,
@@ -526,6 +554,25 @@ function rephrase(text) {
 
   for (const fn of transforms) {
     result = fn(result);
+  }
+
+  // API pass — look up synonyms for words not in local dict
+  const words = result.split(/\s+/);
+  let apiChanged = false;
+  for (let i = 0; i < words.length; i++) {
+    const lower = words[i].toLowerCase().replace(/[^a-z0-9']/g, '');
+    if (lower.length > 2 && !swaps[lower] && Math.random() < 0.7) {
+      const syns = await fetchSynonyms(lower);
+      if (syns.length > 0) {
+        const punct = words[i].replace(/[a-zA-Z0-9']/g, '');
+        words[i] = syns[Math.floor(Math.random() * syns.length)] + punct;
+        apiChanged = true;
+      }
+    }
+  }
+  if (apiChanged) {
+    const joined = words.join(' ');
+    result = joined.replace(/^\s+/, '').replace(/\s+$/, '');
   }
 
   if (result !== text) {
