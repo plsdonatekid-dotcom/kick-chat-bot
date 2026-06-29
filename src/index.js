@@ -90,35 +90,33 @@ startHealthServer(parseInt(process.env.PORT) || 3000, kickChat);
 
 const POOL_LIMIT = 500;
 async function generateReply(messageContent, senderName) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
     return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `You are a Kick chat bot with a sarcastic, banter-heavy personality. Keep responses VERY short (under 12 words). Reply to ${senderName}: "${messageContent}"`
-            }]
-          }],
-          generationConfig: { maxOutputTokens: 30, temperature: 0.9 }
-        })
-      }
-    );
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are a Kick chat bot with a sarcastic, banter-heavy personality. Keep responses VERY short (under 12 words), use slang.' },
+          { role: 'user', content: `${senderName}: ${messageContent}` }
+        ],
+        max_tokens: 30,
+        temperature: 0.9
+      })
+    });
     if (res.ok) {
       const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = data.choices?.[0]?.message?.content;
       if (text) return text.trim().slice(0, 150);
     }
   } catch (err) {
-    console.error('Gemini error:', err.message);
+    console.error('Groq error:', err.message);
   }
 
   const fallbacks = ["Ok", "Cool", "Whatever you say", "If you say so", "Sure", "Alright", "Fair enough", "You do you", "Noted", "I guess"];
