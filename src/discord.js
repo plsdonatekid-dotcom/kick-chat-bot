@@ -91,11 +91,21 @@ class DiscordBot extends EventEmitter {
           this.saveState();
           await interaction.reply('Message pool cleared.');
           break;
+        case 'speed': {
+          const ms = interaction.options.getInteger('ms');
+          if (ms < 200) {
+            await interaction.reply({ content: 'Minimum delay is 200ms to avoid rate limits.', flags: MessageFlags.Ephemeral });
+            break;
+          }
+          this.emit('setSpeed', ms);
+          await interaction.reply(`Message send delay set to **${ms}ms** (was ${this.state.sendDelay}ms)`);
+          break;
+        }
         case 'status': {
           const running = this.state.isRunning ? 'Running' : 'Stopped';
           const channel = this.state.channelId ? `<#${this.state.channelId}>` : 'Not set';
           await interaction.reply(
-            `**Status:** ${running}\n**Channel:** ${channel}\n**Pool:** ${this.state.messagePool.length} messages\n**Streamer:** ${this.state.streamer}`
+            `**Status:** ${running}\n**Channel:** ${channel}\n**Pool:** ${this.state.messagePool.length} messages\n**Streamer:** ${this.state.streamer}\n**Speed:** ${this.state.sendDelay}ms`
           );
           break;
         }
@@ -147,6 +157,10 @@ class DiscordBot extends EventEmitter {
       new SlashCommandBuilder()
         .setName('status')
         .setDescription('Show current bot status'),
+      new SlashCommandBuilder()
+        .setName('speed')
+        .setDescription('Set message send delay in milliseconds')
+        .addIntegerOption(o => o.setName('ms').setDescription('Delay in ms (min 200)').setRequired(true)),
     ];
 
     try {

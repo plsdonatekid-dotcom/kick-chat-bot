@@ -54,7 +54,8 @@ let state = {
   channelId: null,
   isRunning: false,
   streamer: process.env.KICK_STREAMER || 'hstikkytokky',
-  userToken: null
+  userToken: null,
+  sendDelay: 1579
 };
 
 function loadState() {
@@ -157,7 +158,7 @@ async function sendCycle() {
     discordBot.sendMessage(state.channelId, `➡️ ${isRephrased ? `*${toSend}* (was: ${rawContent})` : entry}`);
   }
 
-    sendTimer = setTimeout(sendCycle, 1579);
+    sendTimer = setTimeout(sendCycle, state.sendDelay);
 }
 
 function startSendCycle() {
@@ -285,6 +286,11 @@ discordBot.on('setStreamer', (name) => {
   state.messagePool = [];
   saveState();
   kickChat.setStreamer(name);
+});
+
+discordBot.on('setSpeed', (ms) => {
+  state.sendDelay = ms;
+  saveState();
 });
 
 kickChat.connect();
